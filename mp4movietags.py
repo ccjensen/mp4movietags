@@ -9,7 +9,7 @@
 """
 mp4movietags.py
 Automatic Movie tagger.
-Uses data from www.thetvdb.com via tvdb_api, 
+Uses data from www.tagchimp.com
 
 thanks goes to:
 Rodney - http://kerstetter.net - for AtomicParsley help
