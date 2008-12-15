@@ -285,7 +285,7 @@ def main():
 	
 	atomicParsley = os.path.join(sys.path[0], "AtomicParsley32")
 	if not os.path.isfile(atomicParsley):
-		sys.stderr.write("AtomicParsley is missing!")
+		sys.stderr.write("AtomicParsley is missing!\n")
 		return -1
 	#end if not os.path.isfile
 	
