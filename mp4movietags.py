@@ -38,16 +38,16 @@ def getDataFromTagChimp(opts, config, movieName, movieYear):
 	if opts.verbose:
 		print "Retrieving data from Tag Chimp"
 	#end if verbose
-	urllib.urlretrieve(url, os.getcwd() + "/temp.xml")
 	
-	o = open("temp2.xml","w") #open for overwrite
-	for line in open("temp.xml"):
+	src = urllib.urlopen(url).readlines()
+	filtered_src = unicode("")
+	
+	for line in src:
 		line = line.decode('utf-8')
 		line = re.sub(">[^a-zA-Z0-9_<]",">",line)
-		o.write(line.encode('utf-8') + "\n")
-	o.close()
+		filtered_src += line.encode('utf-8') + "\n"
 	
-	dom = minidom.parse(os.getcwd() + "/temp2.xml")
+	dom = minidom.parseString(filtered_src)
 	
 	hits = dom.getElementsByTagName('movie')
 	
@@ -304,14 +304,14 @@ def main():
 	#end if len(args)
 	
 	if not os.path.isfile(args[0]):
-		sys.stderr.write(args[0] + " is not a valid file")
+		sys.stderr.write(args[0] + " is not a valid file\n")
 		return 1
 	#end if not os.path.isfile
 	print "Processing: %s" % args[0]
 	fileName = os.path.basename(args[0])
 	(movieFileName, extension) = os.path.splitext(fileName)
 	if not extension.count("mp4") and not extension.count("m4v"):
-		sys.stderr.write("%s is of incorrect file type. Convert to h264 with extension mp4 or m4v\"") % fileName
+		sys.stderr.write("%s is of incorrect file type. Convert to h264 with extension mp4 or m4v\n" % fileName)
 		return 2
 	#end if not extension
 	
@@ -322,7 +322,7 @@ def main():
 		movieName = movieFileName.replace(movieYear, '', 1).strip()
 		movieYear = yearWithoutBrackets.findall(movieYear)[0]
 	except:
-		sys.stderr.write("%s is of incorrect syntax. Example: \"Movie Name (YEAR).m4v\"") % fileName
+		sys.stderr.write("%s is of incorrect syntax. Example: \"Movie Name (YEAR).m4v\"" % fileName)
 		return 3
 	#end try
 	
