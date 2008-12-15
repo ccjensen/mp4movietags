@@ -283,7 +283,7 @@ def main():
 		config['url_getMovies'] = "https://www.tagchimp.com/ape/lookup.php?token=%(apikey)s&type=search&title=%%s&videoKind=Movie&totalChapters=1&limit=4&locked=true" % config
 	#end if opts.kind
 	
-	atomicParsley = os.path.dirname(__file__) + "/AtomicParsley32"
+	atomicParsley = os.path.join(sys.path[0], "AtomicParsley32")
 	if not os.path.isfile(atomicParsley):
 		sys.stderr.write("AtomicParsley is missing!")
 		return -1
