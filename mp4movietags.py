@@ -2,7 +2,7 @@
 #encoding:utf-8
 #author:ccjensen/Chris
 #project:mp4movietagger
-#repository:http://github.com/ccjensen/mp4movietags/
+#repository:http://github.com/ccjensen/mp4movietags
 #license:Creative Commons GNU GPL v2
 # (http://creativecommons.org/licenses/GPL/2.0/)
  
