@@ -102,10 +102,6 @@ def getDataFromTagChimp(opts, config, movieName, movieYear):
 		movies.append(movie)
 	#end for node
 	
-	#remove temporary files
-	os.remove(os.getcwd() + "/temp.xml")
-	os.remove(os.getcwd() + "/temp2.xml")
-	
 	return movies
 #end getDataFromTagChimp
 
