@@ -1,0 +1,73 @@
+++++++++++  mp4tvtags v0.5  ++++++++++
+works on Mac OS X Leopard & Snow Leopard
+
+thanks goes to:
+Rodney - http://kerstetter.net - for AtomicParsley help
+dbr - http://github.com/dbr/themoviedb - for the API wrapper to TMDb
+
+This requires Python and a modified version of AtomicParsley (to allow it to write to the "long description" tag).
+Below are instructions on how to edit the source version of AtomicParsley (thanks to creator of MetaX Rodney - http://kerstetter.net for the code snippets). Rather then build it yourself, it might be easier to download MetaX and copy the AtomicParsley32 from /../MetaX.app/Contents/Resources
+
+No matter which method you choose, the modified version of AtomicParsley must be placed in the same directory as the the mp4movietags files.
+
+Usage: mp4movietags.py [options] <path to moviefile>
+mp4movietags.py -h for full list of options
+
+Options:
+  -h, --help            show this help message and exit
+  -b, --batch           selects first search result, requires no human
+                        intervention once launched
+  -i, --interactive     interactivly select correct movie from search results
+                        [default]
+  -c, --cautious        Writes everything to new files. Nothing is deleted
+                        (will make a mess!)
+  -d, --debug           shows all debugging info
+  -v, --verbose         Will provide some feedback [default]
+  -q, --quiet           For ninja-like processing
+  -f, --force-tagging   Tags previously tagged files
+  -r, --remove-artwork  removes previously embeded artwork
+  -t, --no-tagging      disables tagging
+
+
+
+
+
+HOW TO MAKE MODIFIED BUILD OF ATOMICPARSLEY
+
+Bits edited in AtomicParsley:
+main.ccp:
+========================================================================
+At about line 70, insert the long description command line definition-->
+
+	#define Meta_description 'p'
+	#define Meta_long_description	 'j'
+
+At about line 974, insert the long description definition -->
+
+	{ "description", required_argument, NULL, Meta_description },
+	{ "longDescription", required_argument, NULL, Meta_long_description},
+
+At about line 1423, insert the code to handle the command line switch -->
+
+	case Meta_description : {
+			APar_ScanAtoms(ISObasemediafile);
+			if ( !APar_assert(metadata_style == ITUNES_STYLE, 1, "description") ) {
+				break;
+			}
+			
+			AtomicInfo* descriptionData_atom = APar_MetaData_atom_Init("moov.udta.meta.ilst.desc.data", 				optarg, AtomFlags_Data_Text);
+			APar_Unified_atom_Put(descriptionData_atom, optarg, UTF8_iTunesStyle_256glyphLimited, 0, 0);
+			break;
+		}
+			
+	case Meta_long_description : {
+			APar_ScanAtoms(ISObasemediafile);
+			if ( !APar_assert(metadata_style == ITUNES_STYLE, 1, "description") ) {
+				break;
+			}
+			
+			AtomicInfo* descriptionData_atom = APar_MetaData_atom_Init("moov.udta.meta.ilst.ldes.data", 				optarg, AtomFlags_Data_Text);
+			APar_Unified_atom_Put(descriptionData_atom, optarg, UTF8_iTunesStyle_Unlimited, 0, 0);
+			break;
+		}
+========================================================================
