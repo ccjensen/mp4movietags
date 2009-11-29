@@ -215,9 +215,7 @@ def main():
     parser.add_option(  "-b", "--batch", action="store_false", dest="interactive",
                         help="Selects first search result, requires no human intervention once launched")
     parser.add_option(  "-i", "--interactive", action="store_true", dest="interactive",
-                        help="Interactivly select correct movie from search results [default]")
-    parser.add_option(  "-c", "--cautious", action="store_false", dest="overwrite", 
-                        help="Writes everything to new files. Nothing is deleted (will make a mess!)")
+                        help="Interactively select correct movie from search results [default]")
     parser.add_option(  "-d", "--debug", action="store_const", const=2, dest="verbose", 
                         help="Shows all debugging info")
     parser.add_option(  "-v", "--verbose", action="store_const", const=1, dest="verbose",
@@ -230,7 +228,7 @@ def main():
                         help="Removes all tags")
     parser.add_option(  "-t", "--no-tagging", action="store_false", dest="tagging",
                         help="Disables tagging")
-    parser.set_defaults( interactive=True, overwrite=True, debug=False, verbose=1, forcetagging=False,
+    parser.set_defaults( interactive=True, debug=False, verbose=1, forcetagging=False,
                             removetags=False, tagging=True )
     
     opts, args = parser.parse_args()
@@ -240,12 +238,6 @@ def main():
         sys.stderr.write("MP4Tagger is missing!\n")
         return -1
     #end if not os.path.isfile
-    
-    if opts.overwrite:
-        additionalParameters = " !!overWrite"
-    else:
-        additionalParameters = ""
-    #end if opts.overwrite
     
     if len(args) == 0:
         parser.error("No file supplied")

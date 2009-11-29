@@ -17,9 +17,7 @@ Options:
   -h, --help           show this help message and exit
   -b, --batch          Selects first search result, requires no human
                        intervention once launched
-  -i, --interactive    Interactivly select correct movie from search results [default]
-  -c, --cautious       Writes everything to new files. Nothing is deleted
-                       (will make a mess!)
+  -i, --interactive    Interactively select correct movie from search results [default]
   -d, --debug          Shows all debugging info
   -v, --verbose        Will provide some feedback [default]
   -q, --quiet          For ninja-like processing
