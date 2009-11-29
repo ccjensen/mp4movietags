@@ -12,16 +12,18 @@ Automatic Movie tagger.
 Uses data from www.themoviedb.org
 
 thanks goes to:
-Rodney - http://kerstetter.net - for AtomicParsley help
+the MP4v2 team (http://code.google.com/p/mp4v2/) for their excellent mp4 container editing library
+the Subler team (http://code.google.com/p/subler/), their project was used as a template for MP4Tagger (source code soon to be released)
 dbr - http://github.com/dbr/themoviedb - for the API wrapper to TMDb
 """
 
 __author__ = "ccjensen/Chris"
-__version__ = "0.3"
+__version__ = "0.5"
  
 import os
 import sys
 import re
+import glob
 from optparse import OptionParser
 import tmdb
 
@@ -36,186 +38,211 @@ def openurl(urls):
 
 def getDataFromTMDb(opts, movieName, movieYear):
     """docstring for getDataFromTMDb"""
-    #download information from TMDb
-    if opts.verbose:
-        print "Retrieving data from TheMovieDB"
-    #end if verbose
-    movieResults = tmdb.search(movieName)
+    if opts.verbose == 2:
+        print "!!Looking up data for: %s - %s" % (movieName, movieYear)
+    #end if debug
+    movieResults = tmdb.search(movieName.decode("utf-8"))
     movies = []
+    
+    if opts.verbose == 2:
+        print "!!Search returned %s hits" % len(movieResults)
+    #end if debug
     
     #we got zero hits, try replacing some commonly used replacement-characters due to filename illegality
     if len(movieResults) < 1:
         if movieName.count(';'):
             tempMovieName = movieName.replace(';', ':')
-            return getDataFromTheMovieDB(opts, tempMovieName, movieYear)
+            return getDataFromTMDb(opts, tempMovieName, movieYear)
         elif movieName.count('_'):
             tempMovieName = movieName.replace('_', ' ')
-            return getDataFromTheMovieDB(opts, tempMovieName, movieYear)
+            return getDataFromTMDb(opts, tempMovieName, movieYear)
         else:
+            #last ditch attempt, search for movies by longest word in movie name as long as more then one word
+            if len(movieName.split()) < 2:
+                return movies
+            #end if len
+            movieNameLongestWord = max(movieName.split(), key=len)
+            longestWordMovies = getDataFromTMDb(opts, movieNameLongestWord, movieYear)
+            if opts.interactive or len(longestWordMovies) == 1:
+                if opts.verbose == 2:
+                    print "!!Using search result(s) based upon longest word search"
+                #end if debug
+                return longestWordMovies
+            #end if interactive
             return movies
         #end if count
     #end if len
     
     for movieResult in movieResults:
-        movie = tmdb.getMovieInfo(movieResult['id'])
         #check that the year tag in the file name matches with the release date, otherwise not the movie we are looking for
-        if movie['released'].startswith(str(movieYear)):
-            movies.append(movie)
+        if opts.verbose == 2:
+            print "!!Potential hit: %s" % movieResult['name']
+        if movieResult['released']:
+            if movieResult['released'].startswith(movieYear) or movieResult['released'].startswith(str(int(movieYear)+1)):
+                movie = tmdb.getMovieInfo(movieResult['id'])
+                movies.append(movie)
     #end for movie
     
     return movies
 #end getDataFromTMDb
 
 
-def tagFile(debug, verbose, forcetagging, movie, atomicParsley, additionalParameters):
+def tagFile(opts, movie, MP4Tagger):
     """docstring for tagFile"""
-    if verbose:
-        print "Tagging file..."
+    if opts.verbose > 0:
+        print "  Tagging file..."
     #end if verbose
     
-    #setup tags for the AtomicParsley function
+    #setup tags for the MP4Tagger function
     addArtwork = " --artwork \"%s\"" % movie['artworkFileName'] #the file we downloaded earlier
-    addStik = " --stik value=\"0\"" #set type to Movie
-    addTitle =  " --title \"%s\"" % movie['name']
+    addMediaKind = " --media_kind \"Movie\"" #set type to Movie
+    addName =  " --name \"%s\"" % movie['name']
     addDescription = " --description \"%s\"" % movie['overview']
-    addLongDescription = " --longDescription \"%s\"" % movie['overview']
-    addContentRating = " --contentRating \"%s\"" % "Unrated" #filler until TMDb support content rating
-    addComment = " --comment \"tagged by mp4movietags\""
+    addLongDescription = " --long_description \"%s\"" % movie['overview']
+    addContentRating = "" # --content_rating \"%s\"" % "Inoffensive"
+    addRating = " --rating \"%s\"" % "Unrated"
+    addComments = " --comments \"tagged by mp4movietags\""
+    additionalParameters = ""
     
     if (movie['released'] == ""):
         addYear = ""
     else:
-        addYear = " --year \"%sT07:00:00Z\"" % movie['released']
+        addYear = " --release_date \"%sT07:00:00Z\"" % movie['released']
+    #end if (movie['released'] == "")
     
     genres = movie['categories']['genre'].keys()
-    addGenre = " --genre \"%s\"" % genres[len(genres)-1]
+    if (len(genres) > 0):
+        addGenre = " --genre \"%s\"" % genres[len(genres)-1]
+    else:
+        addGenre = ""
+    #end if (len(genres)
     
     artist = ""
     for personID in movie['cast']['Director']:
         artist = movie['cast']['Director'][personID]['name']
         break #we only need one of the director's (if multiple)
+    #end for personID
     
     addArtist = " --artist \"%s\"" % artist
     
     #create rDNSatom
-    castDNS = ""
-    directorsDNS = ""
-    producersDNS = ""
-    screenwritersDNS = ""
+    addCast = ""
+    addDirectors = ""
+    addCodirectors = ""
+    addProducers = ""
+    addScreenwriters = ""
     if len(movie['cast']['Actor']) > 0:
-        actors = createNameArrayFromJobSpecificCastDict(movie['cast']['Actor'])
-        castDNS = createrdnsatom("cast", actors)
+        actors = createCommaSeperatedStringFromJobSpecificCastDict(movie['cast']['Actor'])
+        addCast = " --cast \"%s\"" % actors
     #end if len 
     if len(movie['cast']['Director']) > 0:
-        directors = createNameArrayFromJobSpecificCastDict(movie['cast']['Director'])
-        directorsDNS = createrdnsatom("directors", directors)
+        directors = createCommaSeperatedStringFromJobSpecificCastDict(movie['cast']['Director'])
+        addDirectors = " --director \"%s\"" % directors
+    #end if len
+    if len(movie['cast']['Codirector']) > 0:
+        codirectors = createCommaSeperatedStringFromJobSpecificCastDict(movie['cast']['Codirector'])
+        addCodirectors = " --codirector \"%s\"" % codirectors
     #end if len
     if len(movie['cast']['Producer']) > 0:
-        producers = createNameArrayFromJobSpecificCastDict(movie['cast']['Producer'])
-        producersDNS = createrdnsatom("producers", producers)
+        producers = createCommaSeperatedStringFromJobSpecificCastDict(movie['cast']['Producer'])
+        addProducers = " --producers \"%s\"" % producers
     #end if len
     if len(movie['cast']['Author']) > 0:
-        authors = createNameArrayFromJobSpecificCastDict(movie['cast']['Author'])
-        screenwritersDNS = createrdnsatom("screenwriters", authors)
+        authors = createCommaSeperatedStringFromJobSpecificCastDict(movie['cast']['Author'])
+        addScreenwriters = " --screenwriters \"%s\"" % authors
     #end if len
     
-    #create the rDNSatom string
-    addrDNSatom = " --rDNSatom \"<?xml version=\'1.0\' encoding=\'UTF-8\'?><plist version=\'1.0\'><dict>%s%s%s%s</dict></plist>\" name=iTunMOVI domain=com.apple.iTunes" % (castDNS, directorsDNS, producersDNS, screenwritersDNS)
-    
     #Create the command line string
-    tagCmd = "\"" + atomicParsley + "\" \"" + movie['fileName'] + "\"" + additionalParameters \
-    + addArtwork + addStik + addArtist + addTitle + addGenre + addDescription + addContentRating \
-    + addYear + addComment + addrDNSatom + addLongDescription
+    tagCmd = "\"" + MP4Tagger + "\" -i \"" + movie['fileName'] + "\"" \
+    + addName + addArtwork + addMediaKind + addArtist + addGenre + addDescription \
+    + addRating + addContentRating + addYear + addComments + addLongDescription \
+    + addCast + addDirectors + addCodirectors + addProducers + addScreenwriters \
+    + additionalParameters
     
+    tagCmd = tagCmd.replace('`', "'")
     
-    #run AtomicParsley using the arguments we have created
-    if debug:
-        print tagCmd
+    if opts.verbose == 2:
+        print "!!Tag command: %s" % tagCmd
     #end if debug
     
-    os.popen(tagCmd.encode("utf-8"))
+    #run MP4Tagger using the arguments we have created
+    result = os.popen(tagCmd.encode("utf-8")).read()
+    if result.count("Program aborted") or result.count("Error"):
+        print "** ERROR: %s" % result
+        return
     
     lockCmd = "chflags uchg \"" + movie['fileName'] + "\""
     
     os.popen(lockCmd.encode("utf-8"))
-    if verbose:
-        print "Tagged and locked: " + movie['fileName']
+    if opts.verbose > 0:
+        print "  Tagged and locked: " + movie['fileName']
     #end if verbose
 #end tagFile
 
-def alreadyTagged(opts, atomicParsley, fileName):
+def alreadyTagged(opts, MP4Tagger, fileName):
     """docstring for checkIfAlreadyTagged"""
     #check if file has already been tagged
-    cmd = "\"" + atomicParsley + "\" \"" + os.getcwd() + "/" + fileName + "\"" + " -t"
+    cmd = "\"" + MP4Tagger + "\" -i \"" + fileName + "\"" + " -t"
     existingTagsUnsplit = os.popen(cmd).read()
     existingTags = existingTagsUnsplit.split('\r')
     for line in existingTags:
-        if line.count("tagged by mp4movietags"):
-            if opts.verbose:
-                print fileName + " already tagged"
+        if line.count("Comments: tagged by mp4movietags"):
+            if opts.verbose > 0:
+                print "  Already tagged. Skipping..."
             #end if verbose
             return True
         #end if line.count
     #end for line
+    if opts.verbose == 2:
+        print "!!Not previously tagged"
     return False
 #end checkIfAlreadyTagged
 
-def createNameArrayFromJobSpecificCastDict(dict):
+def createCommaSeperatedStringFromJobSpecificCastDict(dict):
     """docstring for createNameArrayFromJobSpecificCastDict"""
-    result = []
+    result = ""
     for personID in dict:
-        result.append(dict[personID]['name'])
+        if result == "":
+            result = dict[personID]['name']
+        else:
+            result = "%s, %s" % (result, dict[personID]['name'])
     return result
 #end createNameArrayFromJobSpecificCastDict
-
-def createrdnsatom(key, array):
-    """docstring for createrdnsatom"""
-    dns = "<key>" + key + "</key><array>"
-    for item in array:
-        if len(array) > 0:
-            if len(item) > 0:
-                dns += "<dict><key>name</key><string>%s</string></dict>" % item
-            #end if len
-        #end if len
-    #end for actor
-    dns += "</array>"
-    return dns
-#end createrdnsatom
 
 def main(): 
     parser = OptionParser(usage="%prog [options] <path to moviefile>\n%prog -h for full list of options")
     
     parser.add_option(  "-b", "--batch", action="store_false", dest="interactive",
-                        help="selects first search result, requires no human intervention once launched")
+                        help="Selects first search result, requires no human intervention once launched")
     parser.add_option(  "-i", "--interactive", action="store_true", dest="interactive",
-                        help="interactivly select correct movie from search results [default]")
+                        help="Interactivly select correct movie from search results [default]")
     parser.add_option(  "-c", "--cautious", action="store_false", dest="overwrite", 
                         help="Writes everything to new files. Nothing is deleted (will make a mess!)")
-    parser.add_option(  "-d", "--debug", action="store_true", dest="debug", 
-                        help="shows all debugging info")
-    parser.add_option(  "-v", "--verbose", action="store_true", dest="verbose",
+    parser.add_option(  "-d", "--debug", action="store_const", const=2, dest="verbose", 
+                        help="Shows all debugging info")
+    parser.add_option(  "-v", "--verbose", action="store_const", const=1, dest="verbose",
                         help="Will provide some feedback [default]")
-    parser.add_option(  "-q", "--quiet", action="store_false", dest="verbose",
+    parser.add_option(  "-q", "--quiet", action="store_const", const=0, dest="verbose",
                         help="For ninja-like processing")
     parser.add_option(  "-f", "--force-tagging", action="store_true", dest="forcetagging",
                         help="Tags previously tagged files")
-    parser.add_option(  "-r", "--remove-artwork", action="store_true", dest="removeartwork",
-                        help="removes previously embeded artwork")
+    parser.add_option(  "-r", "--remove-tags", action="store_true", dest="removetags",
+                        help="Removes all tags")
     parser.add_option(  "-t", "--no-tagging", action="store_false", dest="tagging",
-                        help="disables tagging")
-    parser.set_defaults( interactive=True, overwrite=True, debug=False, verbose=True, forcetagging=False,
-                            removeartwork=False, tagging=True )
+                        help="Disables tagging")
+    parser.set_defaults( interactive=True, overwrite=True, debug=False, verbose=1, forcetagging=False,
+                            removetags=False, tagging=True )
     
     opts, args = parser.parse_args()
     
-    atomicParsley = os.path.join(sys.path[0], "AtomicParsley32")
-    if not os.path.isfile(atomicParsley):
-        sys.stderr.write("AtomicParsley is missing!\n")
+    MP4Tagger = os.path.join(sys.path[0], "MP4Tagger")
+    if not os.path.isfile(MP4Tagger):
+        sys.stderr.write("MP4Tagger is missing!\n")
         return -1
     #end if not os.path.isfile
     
     if opts.overwrite:
-        additionalParameters = " --overWrite"
+        additionalParameters = " !!overWrite"
     else:
         additionalParameters = ""
     #end if opts.overwrite
@@ -232,11 +259,17 @@ def main():
         sys.stderr.write(args[0] + " is not a valid file\n")
         return 1
     #end if not os.path.isfile
-    if opts.forcetagging:
-        processingString = "Processing: %s [forced]" % args[0]
-    else:
-        processingString = "Processing: %s" % args[0]
-    print processingString
+    
+    if opts.verbose > 0:
+        if opts.forcetagging:
+            processingString = "Processing: %s [forced]" % args[0]
+        else:
+            processingString = "Processing: %s" % args[0]
+        print processingString
+    #end if opts.verbose > 0
+    
+    #switch to the directory that holds the movie we wish to tag
+    os.chdir(os.path.abspath(os.path.dirname(args[0])))
     fileName = os.path.basename(args[0])
     (movieFileName, extension) = os.path.splitext(fileName)
     if not extension.count("mp4") and not extension.count("m4v"):
@@ -255,42 +288,52 @@ def main():
         return 3
     #end try
     
-    if opts.removeartwork:
-        if opts.verbose:
-            print "Removing any pre-existing embeded artwork from %s" % fileName
+    if opts.removetags:
+        if opts.verbose > 0:
+            print "  Removing any pre-existing tags from %s" % fileName
         #end if opts.verbose
+        removeTagsCmd = "\"" + MP4Tagger + "\" -i \"" + fileName + "\" -r"
+        if opts.verbose == 2:
+            print "Remove tags command: %s" % removeTagsCmd
+        #end if debug
         #remove any pre-existing embeded artwork
-        os.popen("\"" + atomicParsley + "\" \"" + fileName + "\" --artwork REMOVE_ALL" + additionalParameters)
+        os.popen(removeTagsCmd)
     #end if opts.removeartwork
     
-    #============ embed information in file using AtomicParsley ============
+    #============ embed information in file using MP4Tagger ============
     if opts.tagging:
         #check if user wishes to bypass already tagged check
         if not opts.forcetagging:
             #check if file has already been tagged
-            if alreadyTagged(opts, atomicParsley, fileName):
+            if alreadyTagged(opts, MP4Tagger, fileName):
                 return 0
             #end if alreadyTagged
         #end if not forcetagging
         
         #============ TAG DATA ============ 
+        #download information from TMDb
+        if opts.verbose > 0:
+            print "  Retrieving data from TheMovieDB"
+        #end if verbose
         movies = getDataFromTMDb(opts, movieName, movieYear)
         
         if len(movies) == 0:
-            sys.stderr.write("No matches found for \"" + movieName + "\" made in " + movieYear + "\n")
+            sys.stderr.write("  No matches found for \"" + movieName + "\" made in " + movieYear + "\n")
             return 4
         
-        if opts.interactive:
-            print "\nPotential Title Matches"
+        if opts.interactive and len(movies) > 1:
+            print "  Potential Title Matches"
             movieCounter = 0
             for movie in movies:
-                print "%s. %s (ID: %s)" % (movieCounter, movie['name'], movie['id'])
+                print "   %s. %s (ID: %s)" % (movieCounter, movie['name'], movie['id'])
                 movieCounter = movieCounter + 1
             #end for movie in movies
-    
+            
             #ask user what movie he wants to use
-            movieChoice = int(raw_input("Select correct title: "))
+            movieChoice = int(raw_input("  Select correct title: "))
         else:
+            if opts.verbose > 0:
+                print "  Autoselecting only movie option"
             movieChoice = 0
         #end if interactive
         
@@ -304,17 +347,17 @@ def main():
             artworksLarge.append(movie['images']['poster'][ids]['original'])
         #end for ids
         
-        if opts.interactive:
+        if opts.interactive and len(artworksLarge) > 1:
             artworkCounter = 0
-            print "\nList of available artwork"
+            print "\n  List of available artwork"
             for artwork in artworksPreview:
-                print "%s. %s" % (artworkCounter, artwork)
+                print "   %s. %s" % (artworkCounter, artwork)
                 artworkCounter += 1
             #end for artwork
     
             #allow user to preview images
-            print "Example of listing: 0 2 4"
-            artworkPreviewRequestNumbers = raw_input("List Images to Preview: ")
+            print "  Example of listing: 0 2 4"
+            artworkPreviewRequestNumbers = raw_input("  List Images to Preview: ")
             artworkPreviewRequests = artworkPreviewRequestNumbers.split()
     
             artworkPreviewUrls = []
@@ -322,10 +365,12 @@ def main():
                 artworkPreviewUrls.append(artworksPreview[int(artworkPreviewRequest)])
             #end for artworkPreviewRequest
             openurl(artworkPreviewUrls)
-    
+            
             #ask user what artwork he wants to use
-            artworkChoice = int(raw_input("Artwork to use: "))
+            artworkChoice = int(raw_input("  Artwork to use: "))
         else:
+            if opts.verbose > 0:
+                print "  Autoselecting only artwork option"
             artworkChoice = 0
         #end if interactive
         
@@ -336,23 +381,22 @@ def main():
         (artworkUrl_baseFileName, artworkUrl_fileNameExtension)=os.path.splitext(artworkUrl_fileName)
     
         artworkFileName = movieFileName + artworkUrl_fileNameExtension
-        if opts.verbose:
-            print "Downloaded Artwork: " + artworkFileName
-        #end if verbose
         os.popen("curl -o \"%s\" \"%s\"" % (artworkFileName, artworkUrl))
+        if opts.verbose > 0:
+            print "  Downloaded Artwork: " + artworkFileName
+        #end if verbose
         
         #update movie dict with filenames
         movie['fileName'] = fileName
         movie['artworkFileName'] = artworkFileName
     
-        tagFile(opts.debug, opts.verbose, opts.forcetagging, movie, atomicParsley, additionalParameters)
+        tagFile(opts, movie, MP4Tagger)
     
         os.remove(artworkFileName)
-        if opts.verbose:
-            print "Deleted temporary artwork file created by mp4movietags"
+        if opts.verbose > 0:
+            print "  Deleted temporary artwork file created by mp4movietags"
         #end if opts.verbose
     #end if opts.tagging
-    
     return 0
     
 

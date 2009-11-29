@@ -285,10 +285,16 @@ def getMovieInfo(id = None):
     return mdb.getMovieInfo(id)
 
 def main():
-    results = search("Sin City")
-    searchResult = results[0]
-    movie = getMovieInfo(searchResult['id'])
-    print len(movie['cast']['Actor'])
+    print "Retrieving data from TheMovieDB"
+    results = search("Bad Boys")
+    print len(results)
+    for result in results:
+        print result['id']
+        print result['name']
+    # searchResult = results[0]
+    #     print searchResult['id']
+    #     movie = getMovieInfo(searchResult['id'])
+    #     print movie['name']
     
 
 if __name__ == '__main__':
