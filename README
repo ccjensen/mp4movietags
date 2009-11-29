@@ -26,3 +26,4 @@ Options:
   -f, --force-tagging  Tags previously tagged files
   -r, --remove-tags    Removes all tags
   -t, --no-tagging     Disables tagging
+
