@@ -18,7 +18,7 @@ dbr - http://github.com/dbr/themoviedb - for the API wrapper to TMDb
 """
 
 __author__ = "ccjensen/Chris"
-__version__ = "0.5"
+__version__ = "0.51"
  
 import os
 import sys
@@ -94,11 +94,11 @@ def tagFile(opts, movie, MP4Tagger):
     #end if verbose
     
     #setup tags for the MP4Tagger function
-    addArtwork = " --artwork \"%s\"" % movie['artworkFileName'] #the file we downloaded earlier
+    addArtwork = " --artwork \"%s\"" % movie['artworkFileName'].replace('"', '\\"') #the file we downloaded earlier
     addMediaKind = " --media_kind \"Movie\"" #set type to Movie
     addName =  " --name \"%s\"" % movie['name']
-    addDescription = " --description \"%s\"" % movie['overview']
-    addLongDescription = " --long_description \"%s\"" % movie['overview']
+    addDescription = " --description \"%s\"" % movie['overview'].replace('"', '\\"')
+    addLongDescription = " --long_description \"%s\"" % movie['overview'].replace('"', '\\"')
     addContentRating = "" # --content_rating \"%s\"" % "Inoffensive"
     addRating = " --rating \"%s\"" % "Unrated"
     addComments = " --comments \"tagged by mp4movietags\""
@@ -153,7 +153,7 @@ def tagFile(opts, movie, MP4Tagger):
     #end if len
     
     #Create the command line string
-    tagCmd = "\"" + MP4Tagger + "\" -i \"" + movie['fileName'] + "\"" \
+    tagCmd = "\"" + MP4Tagger + "\" -i \"" + movie['fileName'].replace('"', '\\"') + "\"" \
     + addName + addArtwork + addMediaKind + addArtist + addGenre + addDescription \
     + addRating + addContentRating + addYear + addComments + addLongDescription \
     + addCast + addDirectors + addCodirectors + addProducers + addScreenwriters \
@@ -171,11 +171,14 @@ def tagFile(opts, movie, MP4Tagger):
         print "** ERROR: %s" % result
         return
     
-    lockCmd = "chflags uchg \"" + movie['fileName'] + "\""
-    
-    os.popen(lockCmd.encode("utf-8"))
     if opts.verbose > 0:
-        print "  Tagged and locked: " + movie['fileName']
+        print "  Tagged: " + movie['fileName']
+    
+    #lockCmd = "chflags uchg \"" + movie['fileName'] + "\""
+    
+    #os.popen(lockCmd.encode("utf-8"))
+    #if opts.verbose > 0:
+    #    print "  Tagged and locked: " + movie['fileName']
     #end if verbose
 #end tagFile
 
@@ -215,7 +218,9 @@ def main():
     parser.add_option(  "-b", "--batch", action="store_false", dest="interactive",
                         help="Selects first search result, requires no human intervention once launched")
     parser.add_option(  "-i", "--interactive", action="store_true", dest="interactive",
-                        help="Interactively select correct movie from search results [default]")
+                        help="Interactivly select correct movie from search results [default]")
+    parser.add_option(  "-c", "--cautious", action="store_false", dest="overwrite", 
+                        help="Writes everything to new files. Nothing is deleted (will make a mess!)")
     parser.add_option(  "-d", "--debug", action="store_const", const=2, dest="verbose", 
                         help="Shows all debugging info")
     parser.add_option(  "-v", "--verbose", action="store_const", const=1, dest="verbose",
@@ -228,7 +233,7 @@ def main():
                         help="Removes all tags")
     parser.add_option(  "-t", "--no-tagging", action="store_false", dest="tagging",
                         help="Disables tagging")
-    parser.set_defaults( interactive=True, debug=False, verbose=1, forcetagging=False,
+    parser.set_defaults( interactive=True, overwrite=True, debug=False, verbose=1, forcetagging=False,
                             removetags=False, tagging=True )
     
     opts, args = parser.parse_args()
@@ -238,6 +243,12 @@ def main():
         sys.stderr.write("MP4Tagger is missing!\n")
         return -1
     #end if not os.path.isfile
+    
+    if opts.overwrite:
+        additionalParameters = " !!overWrite"
+    else:
+        additionalParameters = ""
+    #end if opts.overwrite
     
     if len(args) == 0:
         parser.error("No file supplied")
