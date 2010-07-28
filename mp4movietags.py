@@ -407,7 +407,7 @@ def main():
     
         tagFile(opts, movie, MP4Tagger)
     
-        #os.remove(artworkFileName)
+        os.remove(artworkFileName)
         if opts.verbose > 0:
             print "  Deleted temporary artwork file created by mp4movietags"
         #end if opts.verbose
