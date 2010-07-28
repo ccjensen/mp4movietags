@@ -15,6 +15,7 @@ thanks goes to:
 the MP4v2 team (http://code.google.com/p/mp4v2/) for their excellent mp4 container editing library
 the Subler team (http://code.google.com/p/subler/), their project was used as a template for MP4Tagger (source code soon to be released)
 dbr - http://github.com/dbr/themoviedb - for the API wrapper to TMDb
+rafaelmagu - Handling of segmentation error in MP4Tagger
 """
 
 __author__ = "ccjensen/Chris"
@@ -167,7 +168,7 @@ def tagFile(opts, movie, MP4Tagger):
     
     #run MP4Tagger using the arguments we have created
     result = os.popen(tagCmd.encode("utf-8")).read()
-    if result.count("Program aborted") or result.count("Error"):
+    if result.count("Program aborted") or result.count("Error") or result.count("Segmentation fault"):
         print "** ERROR: %s" % result
         return
     
@@ -233,8 +234,10 @@ def main():
                         help="Removes all tags")
     parser.add_option(  "-t", "--no-tagging", action="store_false", dest="tagging",
                         help="Disables tagging")
+    parser.add_option(  "-y", "--year", action="store_true", dest="year",
+                        help="Disables the year detection and uses a user-provided value")
     parser.set_defaults( interactive=True, overwrite=True, debug=False, verbose=1, forcetagging=False,
-                            removetags=False, tagging=True )
+                            removetags=False, tagging=True, year=False )
     
     opts, args = parser.parse_args()
     
@@ -254,6 +257,10 @@ def main():
         parser.error("No file supplied")
     #end if len(args)
     
+    if opts.year:
+        year = args.pop(0)
+        print "Using provided year: %s" % year
+
     if len(args) > 1:
         parser.error("Provide single file")
     #end if len(args)
@@ -282,14 +289,19 @@ def main():
     
     yearWithBrackets = re.compile("\([0-9]{4}\)")
     yearWithoutBrackets = re.compile("[0-9]{4}")
-    try:
-        movieYear = yearWithBrackets.findall(movieFileName)[0]
+
+    if opts.year:
+        movieYear = year
         movieName = movieFileName.replace(movieYear, '', 1).strip()
-        movieYear = yearWithoutBrackets.findall(movieYear)[0]
-    except:
-        sys.stderr.write("%s is of incorrect syntax. Example: \"Movie Name (YEAR).m4v\"" % fileName)
-        return 3
-    #end try
+    else:
+        try:
+            movieYear = yearWithBrackets.findall(movieFileName)[0]
+            movieName = movieFileName.replace(movieYear, '', 1).strip()
+            movieYear = yearWithoutBrackets.findall(movieYear)[0]
+        except:
+            sys.stderr.write("%s is of incorrect syntax. Example: \"Movie Name (YEAR).m4v\"" % fileName)
+            return 3
+        #end try
     
     if opts.removetags:
         if opts.verbose > 0:
@@ -383,8 +395,8 @@ def main():
         (artworkUrl_base, artworkUrl_fileName) = os.path.split(artworkUrl)
         (artworkUrl_baseFileName, artworkUrl_fileNameExtension)=os.path.splitext(artworkUrl_fileName)
     
-        artworkFileName = movieFileName + artworkUrl_fileNameExtension
-        os.popen("curl -o \"%s\" \"%s\"" % (artworkFileName, artworkUrl))
+        artworkFileName = movie['name'] + artworkUrl_fileNameExtension
+        os.popen("curl -s -o \"%s\" \"%s\"" % (artworkFileName, artworkUrl))
         if opts.verbose > 0:
             print "  Downloaded Artwork: " + artworkFileName
         #end if verbose
@@ -395,7 +407,7 @@ def main():
     
         tagFile(opts, movie, MP4Tagger)
     
-        os.remove(artworkFileName)
+        #os.remove(artworkFileName)
         if opts.verbose > 0:
             print "  Deleted temporary artwork file created by mp4movietags"
         #end if opts.verbose
@@ -405,4 +417,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
